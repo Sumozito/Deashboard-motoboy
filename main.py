@@ -6,21 +6,16 @@ from datetime import datetime
 # Configurações de Design e Tema
 st.set_page_config(page_title="CPMA Digital - Motoboy Pro", layout="wide")
 
-# Estilização para alto contraste e leitura fácil no celular
+# Estilização para alto contraste e leitura fácil
 st.markdown("""
     <style>
-    /* Fundo geral um pouco mais escuro para não ofuscar */
     .main { background-color: #121212; color: #ffffff; }
-    
-    /* Cartões das métricas com fundo escuro e bordas destacadas */
     div[data-testid="stMetric"] {
         background-color: #1e1e1e;
         border: 2px solid #333;
         padding: 20px;
         border-radius: 15px;
     }
-    
-    /* Forçar cor do texto das métricas para Branco e Verde (Destaque) */
     div[data-testid="stMetricLabel"] {
         color: #bbbbbb !important;
         font-size: 18px !important;
@@ -29,8 +24,6 @@ st.markdown("""
         color: #00ff00 !important;
         font-weight: bold !important;
     }
-    
-    /* Ajuste de tabelas para modo escuro */
     .stTable { background-color: #1e1e1e; color: white; }
     </style>
     """, unsafe_allow_html=True)
@@ -49,10 +42,13 @@ st.sidebar.header("📝 Lançamento de Turno")
 with st.sidebar.form("form_diario"):
     data = st.date_input("Data", datetime.now())
     app = st.selectbox("App Principal", ["iFood", "99 Moto", "Uber Flash", "Entrega Particular"])
-    valor = st.number_input("Faturamento Bruto (R$)", min_value=0.0)
-    km = st.number_input("KM Rodado Total", min_value=0)
-    gasosa = st.number_input("Gasto Gasolina (R$)", min_value=0.0)
-    almoço = st.number_input("Alimentação/Extra (R$)", min_value=0.0)
+    valor = st.number_input("Faturamento Bruto (R$)", min_value=0.0, format="%.2f")
+    
+    # AJUSTE AQUI: Agora aceita números decimais (metros)
+    km = st.number_input("KM Rodado Total (ex: 21.9)", min_value=0.0, step=0.1, format="%.1f")
+    
+    gasosa = st.number_input("Gasto Gasolina (R$)", min_value=0.0, format="%.2f")
+    almoço = st.number_input("Alimentação/Extra (R$)", min_value=0.0, format="%.2f")
     
     submit = st.form_submit_button("Salvar Turno")
     
@@ -69,16 +65,16 @@ if not df.empty:
     total_km = df['KM Rodado'].sum()
     total_despesas = df['Gasolina'].sum() + df['Alimentação'].sum()
     
-    # Reserva de Manutenção (R$ 0,10 por KM para o plano Conquiste)
+    # Reserva de Manutenção (R$ 0,10 por KM)
     reserva_manutencao = total_km * 0.10
     lucro_real = total_bruto - total_despesas - reserva_manutencao
     
-    # DASHBOARD VISUAL (Métricas com cores fixas agora)
+    # DASHBOARD VISUAL
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Faturamento Total", f"R$ {total_bruto:,.2f}")
     col2.metric("Lucro Líquido Real", f"R$ {lucro_real:,.2f}")
     col3.metric("Média R$ / KM", f"R$ {(total_bruto/total_km if total_km > 0 else 0):.2f}")
-    col4.metric("Distância Total", f"{total_km} km")
+    col4.metric("Distância Total", f"{total_km:.1f} km")
 
     st.divider()
 
@@ -92,7 +88,6 @@ if not df.empty:
 
     with c2:
         st.subheader("🎯 Meta: Próximo Objetivo")
-        # Meta exemplo para sua viagem (R$ 5.000,00)
         progresso = min(lucro_real / 5000, 1.0) if lucro_real > 0 else 0
         st.progress(progresso)
         st.write(f"Progresso: **{progresso*100:.1f}%**")
@@ -101,4 +96,4 @@ if not df.empty:
     st.subheader("📋 Histórico")
     st.dataframe(df.sort_values(by='Data', ascending=False), use_container_width=True)
 else:
-    st.info("Aguardando o primeiro lançamento... Preencha os dados na barra lateral.")
+    st.info("Aguardando o primeiro lançamento...")
