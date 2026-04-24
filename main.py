@@ -1,68 +1,86 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
 
-# Configuração da Página
-st.set_page_config(page_title="Dashboard Motoboy Pro", layout="wide")
+# Configurações de Design
+st.set_page_config(page_title="CPMA Digital - Motoboy Pro", layout="wide")
 
-st.title("🚀 Painel de Controle - Motoboy Extra")
-st.markdown("Foco em Lucratividade e Manutenção Preventiva")
+# Estilização CSS para parecer um App Profissional
+st.markdown("""
+    <style>
+    .main { background-color: #f5f7f9; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("📊 Gestão Profissional de Entregas")
+st.subheader("Controle de Receitas, Despesas e Metas de Longo Prazo")
+
+# --- LÓGICA DE DADOS (Simulação de Banco de Dados) ---
+# Em uma versão final, conectaríamos ao Google Sheets para salvar permanentemente.
+if 'dados' not in st.session_state:
+    st.session_state.dados = pd.DataFrame(columns=[
+        'Data', 'Plataforma', 'Receita Bruta', 'KM Rodado', 'Gasolina', 'Alimentação', 'Outros'
+    ])
 
 # --- SIDEBAR: ENTRADA DE DADOS ---
-st.sidebar.header("📥 Lançamento Diário")
-data = st.sidebar.date_input("Data do Trampo")
-plataforma = st.sidebar.selectbox("Plataforma", ["iFood", "99 Moto", "Uber Flash", "Particular"])
-receita = st.sidebar.number_input("Receita Bruta (R$)", min_value=0.0, step=10.0)
-km_rodado = st.sidebar.number_input("KM Rodado no dia", min_value=0, step=1)
-gasolina = st.sidebar.number_input("Gasto com Gasolina (R$)", min_value=0.0, step=5.0)
-alimentacao = st.sidebar.number_input("Alimentação na Rua (R$)", min_value=0.0, step=5.0)
+st.sidebar.header("📝 Lançamento de Turno")
+with st.sidebar.form("form_diario"):
+    data = st.date_input("Data", datetime.now())
+    app = st.selectbox("App Principal", ["iFood", "99 Moto", "Uber Flash", "Entrega Particular"])
+    valor = st.number_input("Faturamento Bruto (R$)", min_value=0.0)
+    km = st.number_input("KM Rodado Total", min_value=0)
+    gasosa = st.number_input("Gasto Gasolina (R$)", min_value=0.0)
+    almoço = st.number_input("Alimentação/Extra (R$)", min_value=0.0)
+    
+    submit = st.form_submit_type("Salvar Turno")
+    if submit:
+        novo_dado = pd.DataFrame([[data, app, valor, km, gasosa, almoço, 0]], 
+                                columns=st.session_state.dados.columns)
+        st.session_state.dados = pd.concat([st.session_state.dados, novo_dado], ignore_index=True)
+        st.sidebar.success("Turno registrado!")
 
-# Simulação de Banco de Dados (Em um caso real, salvaria em CSV ou SQL)
-if st.sidebar.button("Salvar Dados"):
-    st.sidebar.success("Dados salvos com sucesso (Simulação)")
+# --- PROCESSAMENTO DOS INDICADORES ---
+df = st.session_state.dados
+if not df.empty:
+    total_bruto = df['Receita Bruta'].sum()
+    total_km = df['KM Rodado'].sum()
+    total_despesas = df['Gasolina'].sum() + df['Alimentação'].sum()
+    
+    # Cálculo de Reserva de Manutenção (R$ 0,10 por KM para cobrir Pneus, Óleo, Relação)
+    reserva_manutencao = total_km * 0.10
+    lucro_real = total_bruto - total_despesas - reserva_manutencao
+    
+    # --- DASHBOARD VISUAL ---
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Faturamento Acumulado", f"R$ {total_bruto:,.2f}")
+    col2.metric("Lucro Líquido Real", f"R$ {lucro_real:,.2f}", help="Já descontando despesas e reserva de manutenção")
+    col3.metric("Eficiência (R$/KM)", f"R$ {(total_bruto/total_km if total_km > 0 else 0):.2f}")
+    col4.metric("KM Total", f"{total_km} km")
 
-# --- DADOS DE EXEMPLO (Para visualizar o Dashboard) ---
-data_fake = {
-    'Data': pd.to_datetime(['2026-04-20', '2026-04-21', '2026-04-22', '2026-04-23']),
-    'Receita': [180, 210, 150, 250],
-    'KM': [120, 140, 100, 160],
-    'Gasolina': [40, 45, 35, 50],
-    'Manutencao_Reserva': [6, 7, 5, 8] # R$ 0,05 por KM
-}
-df = pd.DataFrame(data_fake)
+    st.divider()
 
-# Cálculos Rápidos
-total_receita = df['Receita'].sum()
-total_km = df['KM'].sum()
-total_gastos = df['Gasolina'].sum() + df['Manutencao_Reserva'].sum()
-lucro_liquido = total_receita - total_gastos
-ganho_por_km = total_receita / total_km
+    c1, c2 = st.columns([2, 1])
 
-# --- LINHA 1: MÉTRICAS PRINCIPAIS ---
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Receita Total", f"R$ {total_receita:.2f}")
-col2.metric("Lucro Líquido", f"R$ {lucro_liquido:.2f}", delta=f"{lucro_liquido/total_receita*100:.1f}% Margem")
-col3.metric("KM Total Rodado", f"{total_km} km")
-col4.metric("Ganho por KM", f"R$ {ganho_por_km:.2f}")
+    with c1:
+        st.subheader("📈 Histórico de Ganhos vs Despesas")
+        fig = px.area(df, x='Data', y=['Receita Bruta', 'Gasolina'], 
+                     title="Evolução Financeira", color_discrete_sequence=['#2ecc71', '#e74c3c'])
+        st.plotly_chart(fig, use_container_width=True)
 
-st.divider()
+    with c2:
+        st.subheader("🎯 Meta: Viagem Foz do Iguaçu")
+        # Exemplo: Meta de R$ 5.000 para Setembro
+        progresso = min(lucro_real / 5000, 1.0)
+        st.progress(progresso)
+        st.write(f"Você já conquistou **{progresso*100:.1f}%** do valor da viagem.")
+        
+        st.info(f"🔧 **Fundo de Manutenção:** R$ {reserva_manutencao:.2f} (Valor sugerido para estar guardado)")
 
-# --- LINHA 2: GRÁFICOS ---
-col_left, col_right = st.columns(2)
+    # --- TABELA DE DETALHES ---
+    st.subheader("📋 Detalhamento de Atividades")
+    st.table(df.sort_values(by='Data', ascending=False))
 
-with col_left:
-    st.subheader("Faturamento Diário")
-    fig_fat = px.line(df, x='Data', y='Receita', markers=True, line_shape='spline')
-    st.plotly_chart(fig_fat, use_container_width=True)
-
-with col_right:
-    st.subheader("Custo de Manutenção Acumulado")
-    # Alerta para o plano Mottu Conquiste
-    reserva_acumulada = df['Manutencao_Reserva'].sum()
-    st.info(f"💰 Você deve ter **R$ {reserva_acumulada:.2f}** reservados para sua próxima manutenção.")
-    fig_km = px.bar(df, x='Data', y='KM', color_discrete_sequence=['orange'])
-    st.plotly_chart(fig_km, use_container_width=True)
-
-# --- TABELA DE HISTÓRICO ---
-st.subheader("📋 Histórico de Movimentações")
-st.dataframe(df, use_container_width=True)
+else:
+    st.info("Aguardando o primeiro lançamento para gerar o dashboard...")
