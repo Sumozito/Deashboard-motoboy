@@ -1,63 +1,115 @@
 import streamlit as st
 import pandas as pd
+import sqlite3
 import plotly.graph_objects as go
 from datetime import datetime
 
-# Configuração de Layout e Estilo Dark Profissional
-st.set_page_config(page_title="CPMA Pro - Gestão", layout="wide")
+# 1. CONFIGURAÇÃO DE TELA (FOCO EM CELULAR)
+st.set_page_config(page_title="CPMA App", layout="wide")
+
+# Estilo Dark Mode Profissional
 st.markdown("""
     <style>
     .main { background-color: #0e1117; color: white; }
-    div[data-testid="stMetric"] { background-color: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 15px; }
-    div[data-testid="stMetricValue"] { color: #00ff00 !important; font-weight: bold; }
+    div[data-testid="stMetric"] { 
+        background-color: #161b22; 
+        border: 1px solid #30363d; 
+        border-radius: 15px; 
+        padding: 10px;
+    }
+    div[data-testid="stMetricValue"] { color: #00ff00 !important; font-size: 24px !important; }
+    .stButton>button { width: 100%; border-radius: 10px; height: 50px; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# URL da sua planilha convertida para CSV
-url = "https://docs.google.com/spreadsheets/d/12xdQ_4kXifbdK7JQedxXBVOK2-GOrkXEkY_hpdYFiEo/gviz/tq?tqx=out:csv"
+# 2. BANCO DE DADOS INTERNO (SQLITE)
+def init_db():
+    conn = sqlite3.connect('entregas.db', check_same_thread=False)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS turnos 
+                 (data TEXT, app TEXT, bruto REAL, km REAL, despesas REAL, lucro REAL)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS config (meta REAL)''')
+    # Inicia meta padrão se não existir
+    c.execute("SELECT meta FROM config")
+    if not c.fetchone():
+        c.execute("INSERT INTO config VALUES (5000.0)")
+    conn.commit()
+    return conn
 
-def carregar_dados():
-    try:
-        data = pd.read_csv(url)
-        # Limpeza: remove colunas ou linhas que contenham códigos HTML por erro
-        data = data[~data.stack().str.contains('<').unstack().any(axis=1)]
-        return data
-    except:
-        return pd.DataFrame(columns=['Data', 'App', 'Bruto', 'KM', 'Despesas', 'Lucro'])
+conn = init_db()
 
-df = carregar_dados()
-if 'meta' not in st.session_state: st.session_state.meta = 5000.0
+# Funções de Dados
+def salvar_turno(d, a, b, k, ds):
+    lucro = b - ds
+    c = conn.cursor()
+    c.execute("INSERT INTO turnos VALUES (?,?,?,?,?,?)", (d, a, b, k, ds, lucro))
+    conn.commit()
 
-st.sidebar.header("⚙️ Configurações")
-st.session_state.meta = st.sidebar.number_input("Meta de Lucro (R$)", value=st.session_state.meta, step=100.0)
+def atualizar_meta(nova_meta):
+    c = conn.cursor()
+    c.execute("UPDATE config SET meta = ?", (nova_meta,))
+    conn.commit()
 
-st.title("📈 CPMA - Dashboard Profissional")
+# 3. INTERFACE DO APP
+st.title("🚀 CPMA Mobile")
 
-# --- GRÁFICO ESTILO BOLSA DE VALORES ---
-# Só exibe se houver dados válidos na coluna Data
-if not df.empty and 'Data' in df.columns and len(df.dropna(subset=['Data'])) > 0:
-    df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
-    df = df.dropna(subset=['Data']).sort_values('Data')
+# Carregar Configurações
+meta_atual = pd.read_sql("SELECT meta FROM config", conn).iloc[0]['meta']
 
+# ABA DE LANÇAMENTO (COMO UM APP)
+with st.expander("➕ REGISTRAR NOVO TURNO", expanded=True):
+    with st.form("form_app", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            data = st.date_input("Data", datetime.now())
+        with col2:
+            app = st.selectbox("Plataforma", ["iFood", "99 Moto", "Uber", "Particular"])
+        
+        bruto = st.number_input("Ganhos Brutos (R$)", min_value=0.0, step=10.0, format="%.2f")
+        km = st.number_input("Quilometragem (KM)", min_value=0.0, step=0.1, format="%.1f")
+        gastos = st.number_input("Combustível/Extra (R$)", min_value=0.0, step=5.0, format="%.2f")
+        
+        if st.form_submit_button("FINALIZAR E SALVAR"):
+            salvar_turno(data.strftime('%Y-%m-%d'), app, bruto, km, gastos)
+            st.success("Turno salvo com sucesso!")
+            st.rerun()
+
+# 4. DASHBOARD DE PERFORMANCE
+df = pd.read_sql("SELECT * FROM turnos ORDER BY data ASC", conn)
+
+if not df.empty:
+    # Gráfico de Linhas (Bolsa de Valores)
     fig = go.Figure()
-    # Faturamento Bruto (Azul)
-    fig.add_trace(go.Scatter(x=df['Data'], y=df['Bruto'], name='Bruto', line=dict(color='#1f77b4', width=2)))
-    # Lucro Líquido (Verde vibrante - Destaque)
-    fig.add_trace(go.Scatter(x=df['Data'], y=df['Lucro'], name='Lucro Real', line=dict(color='#00ff00', width=5)))
-    # Despesas (Vermelho pontilhado)
-    fig.add_trace(go.Scatter(x=df['Data'], y=df['Despesas'], name='Despesas', line=dict(color='#ff4b4b', width=2, dash='dot')))
-
-    fig.update_layout(template="plotly_dark", hovermode="x unified", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
+    fig.add_trace(go.Scatter(x=df['data'], y=df['bruto'], name='Bruto', line=dict(color='#1f77b4', width=2)))
+    fig.add_trace(go.Scatter(x=df['data'], y=df['lucro'], name='Lucro', line=dict(color='#00ff00', width=4)))
+    fig.add_trace(go.Scatter(x=df['data'], y=df['despesas'], name='Custo', line=dict(color='#ff4b4b', dash='dot')))
+    
+    fig.update_layout(template="plotly_dark", height=300, margin=dict(l=0,r=0,t=20,b=0),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     st.plotly_chart(fig, use_container_width=True)
 
-    # Métricas de Resumo
-    c1, c2, c3 = st.columns(3)
-    lucro_total = pd.to_numeric(df['Lucro'], errors='coerce').sum()
+    # Métricas
+    lucro_total = df['lucro'].sum()
+    c1, c2 = st.columns(2)
     c1.metric("Lucro Total", f"R$ {lucro_total:,.2f}")
-    c2.metric("Meta", f"R$ {st.session_state.meta:,.2f}")
-    c3.metric("Progresso", f"{(lucro_total/st.session_state.meta)*100:.1f}%")
-else:
-    st.warning("⚠️ Planilha lida, mas sem dados válidos. Limpe sua planilha e use apenas a primeira linha para os títulos: Data, App, Bruto, KM, Despesas, Lucro.")
+    
+    # Meta Editável Direto
+    nova_meta = c2.number_input("Meta (R$)", value=float(meta_atual), step=100.0)
+    if nova_meta != meta_atual:
+        atualizar_meta(nova_meta)
+        st.rerun()
 
-st.subheader("📝 Histórico")
-st.data_editor(df, use_container_width=True)
+    # Barra de Progresso
+    progresso = min(lucro_total / nova_meta, 1.0) if nova_meta > 0 else 0
+    st.progress(progresso)
+    st.caption(f"Faltam R$ {(nova_meta - lucro_total):,.2f} para o objetivo.")
+
+    # Histórico Editável
+    st.subheader("📋 Histórico")
+    edited_df = st.data_editor(df, use_container_width=True, num_rows="dynamic", hide_index=True)
+    if st.button("CONFIRMAR EDIÇÕES NO BANCO"):
+        edited_df.to_sql('turnos', conn, if_exists='replace', index=False)
+        st.success("Banco de dados atualizado!")
+        st.rerun()
+else:
+    st.info("Nenhum dado registrado. Comece lançando seu primeiro turno acima!")
