@@ -4,126 +4,112 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO DA PÁGINA (VISUAL LIMPO)
+# 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(
-    page_title="CPMA Pro", 
-    layout="wide", 
-    initial_sidebar_state="collapsed",
-    menu_items={
-        'Get Help': None,
-        'Report a bug': None,
-        'About': None
-    }
+    page_title="CPMA Mobile",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# 2. CSS PARA CORES, CONTRASTE E ESCONDER OPÇÕES DE ADM
+# 2. CSS ESPECÍFICO PARA OCULTAR APENAS O QUE VOCÊ CIRCULOU
 st.markdown("""
     <style>
-    /* Esconder menus de desenvolvedor */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    div[data-testid="stToolbar"] {visibility: hidden;}
+    /* Esconde botões de Share, Star e GitHub, mas mantém o menu de 3 linhas */
+    header[data-testid="stHeader"] > div:first-child {
+        visibility: hidden;
+    }
+    header[data-testid="stHeader"] {
+        background-color: rgba(0,0,0,0);
+    }
     
-    /* Fundo Escuro e Cartões de Alto Contraste */
+    /* Esconde o rodapé 'Made with Streamlit' */
+    footer {visibility: hidden;}
+    
+    /* Remove a barra flutuante de edição (stToolbar) */
+    div[data-testid="stToolbar"] {display: none !important;}
+
+    /* Estilização geral */
     .main { background-color: #0e1117; color: #ffffff; }
     div[data-testid="stMetric"] {
         background-color: #161b22;
-        border: 2px solid #30363d;
-        padding: 15px;
+        border: 1px solid #30363d;
         border-radius: 12px;
     }
-    div[data-testid="stMetricLabel"] { color: #8b949e !important; font-size: 16px !important; }
-    div[data-testid="stMetricValue"] { color: #39d353 !important; font-weight: bold !important; }
-    
-    /* Estilo da Tabela e Inputs */
-    .stTable { background-color: #161b22; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. CONEXÃO COM A BASE DE DADOS (GOOGLE SHEETS)
-# Substitua pela sua URL se necessário, mas o sistema lerá das "Secrets"
+# 3. CONEXÃO COM GOOGLE SHEETS
 url = "https://docs.google.com/spreadsheets/d/12xdQ_4kXifbdK7JQedxXBVOK2-GOrkXEkY_hpdYFiEo/edit?usp=sharing"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Carregar dados
 try:
     df = conn.read(spreadsheet=url, ttl="0")
 except:
     df = pd.DataFrame(columns=['Data', 'App', 'Bruto', 'KM', 'Despesas', 'Lucro'])
 
-st.title("📈 CPMA - Gestão Profissional")
+st.title("🚀 CPMA Mobile")
 
-# 4. BARRA LATERAL (CONFIGURAÇÕES E LANÇAMENTOS)
+# --- BARRA LATERAL (LANÇAMENTOS E METAS) ---
+# Agora o botão de 3 linhas vai funcionar para abrir aqui
 st.sidebar.header("⚙️ Painel de Controle")
 
-# Meta Editável
 if 'meta_valor' not in st.session_state:
     st.session_state.meta_valor = 5000.0
-st.session_state.meta_valor = st.sidebar.number_input("Ajustar Valor da Meta (R$)", value=st.session_state.meta_valor, step=100.0)
+st.session_state.meta_valor = st.sidebar.number_input("Valor da Meta (R$)", value=st.session_state.meta_valor, step=100.0)
 
-with st.sidebar.expander("➕ Lançar Novo Dia"):
-    with st.form("novo_registro"):
-        data_f = st.date_input("Data", datetime.now())
-        app_f = st.selectbox("Plataforma", ["iFood", "99 Moto", "Particular", "Uber Flash"])
-        bruto_f = st.number_input("Receita Bruta (R$)", min_value=0.0, format="%.2f")
-        km_f = st.number_input("KM Rodado (ex: 21.9)", min_value=0.0, step=0.1, format="%.1f")
-        desp_f = st.number_input("Despesas (Gasolina/Alimentação)", min_value=0.0, format="%.2f")
+with st.sidebar.expander("➕ REGISTRAR TURNO", expanded=False):
+    with st.form("registro"):
+        d = st.date_input("Data", datetime.now())
+        a = st.selectbox("App", ["iFood", "99 Moto", "Uber", "Particular"])
+        rb = st.number_input("Ganhos Brutos (R$)", min_value=0.0, format="%.2f")
+        k = st.number_input("KM Rodado", min_value=0.0, step=0.1, format="%.1f")
+        ds = st.number_input("Despesas (R$)", min_value=0.0, format="%.2f")
         
-        if st.form_submit_button("FINALIZAR E SALVAR"):
-            novo_dado = pd.DataFrame([[
-                data_f.strftime('%Y-%m-%d'), 
-                app_f, bruto_f, km_f, desp_f, (bruto_f - desp_f)
-            ]], columns=['Data', 'App', 'Bruto', 'KM', 'Despesas', 'Lucro'])
-            
-            df_atualizado = pd.concat([df, novo_dado], ignore_index=True)
+        if st.form_submit_button("SALVAR NO HISTÓRICO"):
+            novo = pd.DataFrame([[d.strftime('%Y-%m-%d'), a, rb, k, ds, (rb-ds)]], 
+                                columns=['Data', 'App', 'Bruto', 'KM', 'Despesas', 'Lucro'])
+            df_atualizado = pd.concat([df, novo], ignore_index=True)
             conn.update(spreadsheet=url, data=df_atualizado)
-            st.sidebar.success("✅ Salvo com sucesso!")
+            st.sidebar.success("Salvo!")
             st.rerun()
 
-# 5. DASHBOARD VISUAL
+# --- DASHBOARD ---
 if not df.empty:
     df['Data'] = pd.to_datetime(df['Data'])
     df = df.sort_values('Data')
 
-    # Métricas Principais
-    c1, c2, c3, c4 = st.columns(4)
+    # Métricas
     lucro_total = df['Lucro'].sum()
+    c1, c2 = st.columns(2)
     c1.metric("Lucro Líquido", f"R$ {lucro_total:,.2f}")
-    c2.metric("Bruto Total", f"R$ {df['Bruto'].sum():,.2f}")
-    c3.metric("KM Total", f"{df['KM'].sum():,.1f} km")
-    c4.metric("Eficiência R$/KM", f"R$ {(df['Bruto'].sum()/df['KM'].sum() if df['KM'].sum() > 0 else 0):.2f}")
+    c2.metric("KM Total", f"{df['KM'].sum():,.1f} km")
 
-    # Gráfico Estilo Bolsa de Valores (Linhas)
-    st.subheader("📊 Gráfico de Performance Financeira")
+    # Gráfico de Linhas (Sem barra de ferramentas)
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df['Data'], y=df['Bruto'], name='Receita Bruta', line=dict(color='#1f77b4', width=2)))
-    fig.add_trace(go.Scatter(x=df['Data'], y=df['Lucro'], name='Lucro Líquido (Real)', line=dict(color='#39d353', width=4)))
-    fig.add_trace(go.Scatter(x=df['Data'], y=df['Despesas'], name='Despesas', line=dict(color='#f85149', width=2, dash='dot')))
-    
+    fig.add_trace(go.Scatter(x=df['Data'], y=df['Bruto'], name='Bruto', line=dict(color='#1f77b4')))
+    fig.add_trace(go.Scatter(x=df['Data'], y=df['Lucro'], name='Lucro', line=dict(color='#39d353', width=4)))
+    fig.add_trace(go.Scatter(x=df['Data'], y=df['Despesas'], name='Custo', line=dict(color='#f85149', dash='dot')))
+
     fig.update_layout(
         template="plotly_dark",
         hovermode="x unified",
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
-        margin=dict(l=0, r=0, t=30, b=0),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        showlegend=False,
+        margin=dict(l=0, r=0, t=10, b=0)
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-    # Barra de Meta
-    st.subheader(f"🎯 Meta: {st.session_state.meta_valor:,.2f}")
-    progresso = min(lucro_total / st.session_state.meta_valor, 1.0) if st.session_state.meta_valor > 0 else 0
-    st.progress(progresso)
-    st.write(f"Você já conquistou **{progresso*100:.1f}%** do seu objetivo.")
+    # Meta
+    st.write(f"### Meta: {st.session_state.meta_valor:,.2f}")
+    prog = min(lucro_total / st.session_state.meta_valor, 1.0) if st.session_state.meta_valor > 0 else 0
+    st.progress(prog)
 
-    # 6. HISTÓRICO EDITÁVEL
+    # Histórico Editável
     st.divider()
-    st.subheader("📝 Editar ou Corrigir Dados")
-    df_editado = st.data_editor(df, use_container_width=True, num_rows="dynamic")
-    if st.button("CONFIRMAR ALTERAÇÕES NO HISTÓRICO"):
-        conn.update(spreadsheet=url, data=df_editado)
-        st.success("✅ Histórico atualizado na nuvem!")
+    st.subheader("📝 Editar Histórico")
+    df_edit = st.data_editor(df, use_container_width=True)
+    if st.button("CONFIRMAR EDIÇÕES"):
+        conn.update(spreadsheet=url, data=df_edit)
+        st.success("Atualizado!")
         st.rerun()
-else:
-    st.info("Aguardando o primeiro lançamento para ativar o gráfico.")
