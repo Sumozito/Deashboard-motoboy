@@ -1,107 +1,129 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import sqlite3
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO DE TELA (LAYOUT MOBILE)
-st.set_page_config(page_title="CPMA Mobile", layout="wide")
+# 1. CONFIGURAÇÃO DA PÁGINA (VISUAL LIMPO)
+st.set_page_config(
+    page_title="CPMA Pro", 
+    layout="wide", 
+    initial_sidebar_state="collapsed",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
+)
 
-# Estilo Dark e Ajustes de Layout Antigo
+# 2. CSS PARA CORES, CONTRASTE E ESCONDER OPÇÕES DE ADM
 st.markdown("""
     <style>
-    .main { background-color: #0e1117; color: white; }
-    div[data-testid="stMetric"] { 
-        background-color: #161b22; 
-        border: 1px solid #30363d; 
-        border-radius: 12px; 
-        padding: 10px;
+    /* Esconder menus de desenvolvedor */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    div[data-testid="stToolbar"] {visibility: hidden;}
+    
+    /* Fundo Escuro e Cartões de Alto Contraste */
+    .main { background-color: #0e1117; color: #ffffff; }
+    div[data-testid="stMetric"] {
+        background-color: #161b22;
+        border: 2px solid #30363d;
+        padding: 15px;
+        border-radius: 12px;
     }
-    div[data-testid="stMetricValue"] { color: #00ff00 !important; font-size: 22px !important; }
-    .stButton>button { width: 100%; border-radius: 8px; height: 45px; background-color: #2ea043; color: white; }
+    div[data-testid="stMetricLabel"] { color: #8b949e !important; font-size: 16px !important; }
+    div[data-testid="stMetricValue"] { color: #39d353 !important; font-weight: bold !important; }
+    
+    /* Estilo da Tabela e Inputs */
+    .stTable { background-color: #161b22; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. BANCO DE DADOS (SQLITE)
-def init_db():
-    conn = sqlite3.connect('entregas.db', check_same_thread=False)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS turnos 
-                 (data TEXT, app TEXT, bruto REAL, km REAL, despesas REAL, lucro REAL)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS config (meta REAL, perc_manut REAL)''')
-    c.execute("SELECT meta FROM config")
-    if not c.fetchone():
-        c.execute("INSERT INTO config VALUES (5000.0, 0.05)") # Meta e 5% para manutenção
-    conn.commit()
-    return conn
+# 3. CONEXÃO COM A BASE DE DADOS (GOOGLE SHEETS)
+# Substitua pela sua URL se necessário, mas o sistema lerá das "Secrets"
+url = "https://docs.google.com/spreadsheets/d/12xdQ_4kXifbdK7JQedxXBVOK2-GOrkXEkY_hpdYFiEo/edit?usp=sharing"
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-conn = init_db()
+# Carregar dados
+try:
+    df = conn.read(spreadsheet=url, ttl="0")
+except:
+    df = pd.DataFrame(columns=['Data', 'App', 'Bruto', 'KM', 'Despesas', 'Lucro'])
 
-# 3. INTERFACE PRINCIPAL
-st.title("🚀 CPMA Mobile")
+st.title("📈 CPMA - Gestão Profissional")
 
-# Carregar Configurações
-config_df = pd.read_sql("SELECT * FROM config", conn)
-meta_atual = float(config_df.iloc[0]['meta'])
-perc_manut = float(config_df.iloc[0]['perc_manut'])
+# 4. BARRA LATERAL (CONFIGURAÇÕES E LANÇAMENTOS)
+st.sidebar.header("⚙️ Painel de Controle")
 
-# FORMULÁRIO DE LANÇAMENTO (LAYOUT INTEGRADO)
-with st.expander("➕ REGISTRAR NOVO TURNO", expanded=True):
-    with st.form("form_mobile", clear_on_submit=True):
-        col_a, col_b = st.columns(2)
-        with col_a:
-            data = st.date_input("Data", datetime.now())
-        with col_b:
-            app = st.selectbox("Plataforma", ["iFood", "99 Moto", "Uber", "Particular"])
-        
-        bruto = st.number_input("Ganhos Brutos (R$)", min_value=0.0, format="%.2f")
-        km = st.number_input("KM", min_value=0.0, step=0.1, format="%.1f") # Ajustado para apenas KM
-        gastos = st.number_input("Combustível/Extra (R$)", min_value=0.0, format="%.2f")
+# Meta Editável
+if 'meta_valor' not in st.session_state:
+    st.session_state.meta_valor = 5000.0
+st.session_state.meta_valor = st.sidebar.number_input("Ajustar Valor da Meta (R$)", value=st.session_state.meta_valor, step=100.0)
+
+with st.sidebar.expander("➕ Lançar Novo Dia"):
+    with st.form("novo_registro"):
+        data_f = st.date_input("Data", datetime.now())
+        app_f = st.selectbox("Plataforma", ["iFood", "99 Moto", "Particular", "Uber Flash"])
+        bruto_f = st.number_input("Receita Bruta (R$)", min_value=0.0, format="%.2f")
+        km_f = st.number_input("KM Rodado (ex: 21.9)", min_value=0.0, step=0.1, format="%.1f")
+        desp_f = st.number_input("Despesas (Gasolina/Alimentação)", min_value=0.0, format="%.2f")
         
         if st.form_submit_button("FINALIZAR E SALVAR"):
-            lucro = bruto - gastos
-            c = conn.cursor()
-            c.execute("INSERT INTO turnos VALUES (?,?,?,?,?,?)", 
-                      (data.strftime('%Y-%m-%d'), app, bruto, km, gastos, lucro))
-            conn.commit()
-            st.success("Salvo!")
+            novo_dado = pd.DataFrame([[
+                data_f.strftime('%Y-%m-%d'), 
+                app_f, bruto_f, km_f, desp_f, (bruto_f - desp_f)
+            ]], columns=['Data', 'App', 'Bruto', 'KM', 'Despesas', 'Lucro'])
+            
+            df_atualizado = pd.concat([df, novo_dado], ignore_index=True)
+            conn.update(spreadsheet=url, data=df_atualizado)
+            st.sidebar.success("✅ Salvo com sucesso!")
             st.rerun()
 
-# 4. DASHBOARD E MÉTRICAS
-df = pd.read_sql("SELECT * FROM turnos ORDER BY data ASC", conn)
-
+# 5. DASHBOARD VISUAL
 if not df.empty:
-    # Gráfico de Linhas (Bolsa de Valores) - Estilo Antigo
+    df['Data'] = pd.to_datetime(df['Data'])
+    df = df.sort_values('Data')
+
+    # Métricas Principais
+    c1, c2, c3, c4 = st.columns(4)
+    lucro_total = df['Lucro'].sum()
+    c1.metric("Lucro Líquido", f"R$ {lucro_total:,.2f}")
+    c2.metric("Bruto Total", f"R$ {df['Bruto'].sum():,.2f}")
+    c3.metric("KM Total", f"{df['KM'].sum():,.1f} km")
+    c4.metric("Eficiência R$/KM", f"R$ {(df['Bruto'].sum()/df['KM'].sum() if df['KM'].sum() > 0 else 0):.2f}")
+
+    # Gráfico Estilo Bolsa de Valores (Linhas)
+    st.subheader("📊 Gráfico de Performance Financeira")
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df['data'], y=df['bruto'], name='Bruto', line=dict(color='#1f77b4', width=2)))
-    fig.add_trace(go.Scatter(x=df['data'], y=df['lucro'], name='Lucro Real', line=dict(color='#00ff00', width=4)))
-    fig.add_trace(go.Scatter(x=df['data'], y=df['despesas'], name='Custo', line=dict(color='#ff4b4b', dash='dot')))
+    fig.add_trace(go.Scatter(x=df['Data'], y=df['Bruto'], name='Receita Bruta', line=dict(color='#1f77b4', width=2)))
+    fig.add_trace(go.Scatter(x=df['Data'], y=df['Lucro'], name='Lucro Líquido (Real)', line=dict(color='#39d353', width=4)))
+    fig.add_trace(go.Scatter(x=df['Data'], y=df['Despesas'], name='Despesas', line=dict(color='#f85149', width=2, dash='dot')))
     
-    fig.update_layout(template="plotly_dark", height=300, margin=dict(l=0,r=0,t=20,b=0),
-                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+    fig.update_layout(
+        template="plotly_dark",
+        hovermode="x unified",
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=30, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    # CÁLCULO DE MANUTENÇÃO (Ex: 5% do Bruto acumulado)
-    manutencao_acumulada = df['bruto'].sum() * perc_manut
-    lucro_total = df['lucro'].sum()
+    # Barra de Meta
+    st.subheader(f"🎯 Meta: {st.session_state.meta_valor:,.2f}")
+    progresso = min(lucro_total / st.session_state.meta_valor, 1.0) if st.session_state.meta_valor > 0 else 0
+    st.progress(progresso)
+    st.write(f"Você já conquistou **{progresso*100:.1f}%** do seu objetivo.")
 
-    # BLOCOS DE MÉTRICAS (Layout Antigo)
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Lucro Total", f"R$ {lucro_total:,.2f}")
-    m2.metric("Fundo Manutenção", f"R$ {manutencao_acumulada:,.2f}", delta="Reserva")
-    m3.metric("Progresso Meta", f"{(lucro_total/meta_atual)*100:.1f}%")
-
-    # Meta Editável
+    # 6. HISTÓRICO EDITÁVEL
     st.divider()
-    nova_meta = st.number_input("Ajustar Meta (R$)", value=meta_atual, step=100.0)
-    if nova_meta != meta_atual:
-        c = conn.cursor()
-        c.execute("UPDATE config SET meta = ?", (nova_meta,))
-        conn.commit()
+    st.subheader("📝 Editar ou Corrigir Dados")
+    df_editado = st.data_editor(df, use_container_width=True, num_rows="dynamic")
+    if st.button("CONFIRMAR ALTERAÇÕES NO HISTÓRICO"):
+        conn.update(spreadsheet=url, data=df_editado)
+        st.success("✅ Histórico atualizado na nuvem!")
         st.rerun()
-
-    # Histórico para edição rápida
-    st.subheader("📋 Histórico")
-    st.data_editor(df, use_container_width=True, hide_index=True)
 else:
-    st.info("Aguardando o primeiro registro...")
+    st.info("Aguardando o primeiro lançamento para ativar o gráfico.")
