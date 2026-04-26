@@ -23,19 +23,23 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CONEXÃO COM GOOGLE SHEETS (Substituindo SQLite)
+# 2. CONEXÃO COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Função para ler os dados da planilha
+# Função para ler os dados da planilha (aba renomeada para 'dados')
 def load_data():
-    return conn.read(worksheet="Página1", ttl="0") # ttl="0" força ler dado novo sempre
+    try:
+        return conn.read(worksheet="dados", ttl="0")
+    except:
+        # Cria um DataFrame vazio se a planilha estiver sem dados
+        return pd.DataFrame(columns=["data", "app", "bruto", "km", "despesas", "lucro"])
 
 df = load_data()
 
 # 3. INTERFACE PRINCIPAL
 st.title("🚀 CPMA Mobile")
 
-# Configurações fixas (Você pode ajustar a meta aqui ou criar outra aba na planilha para isso)
+# Configurações de Meta
 meta_atual = 5000.0
 perc_manut = 0.05
 
@@ -55,7 +59,6 @@ with st.expander("➕ REGISTRAR NOVO TURNO", expanded=True):
         if st.form_submit_button("FINALIZAR E SALVAR"):
             lucro_calc = bruto_input - gastos_input
             
-            # Criar nova linha para o DataFrame
             nova_linha = pd.DataFrame([{
                 "data": data_input.strftime('%Y-%m-%d'),
                 "app": app_input,
@@ -65,21 +68,21 @@ with st.expander("➕ REGISTRAR NOVO TURNO", expanded=True):
                 "lucro": lucro_calc
             }])
             
-            # Combinar com dados existentes e salvar no Google Sheets
+            # Atualiza a planilha
             df_atualizado = pd.concat([df, nova_linha], ignore_index=True)
-            conn.update(worksheet="Página1", data=df_atualizado)
+            conn.update(worksheet="dados", data=df_atualizado)
             
             st.success("Salvo na Nuvem!")
             st.rerun()
 
 # 4. DASHBOARD E MÉTRICAS
 if not df.empty:
-    # Garantir que as colunas numéricas estão corretas
-    df['bruto'] = pd.to_numeric(df['bruto'])
-    df['lucro'] = pd.to_numeric(df['lucro'])
-    df['despesas'] = pd.to_numeric(df['despesas'])
+    # Garantir tipos numéricos para os cálculos
+    df['bruto'] = pd.to_numeric(df['bruto'], errors='coerce').fillna(0)
+    df['lucro'] = pd.to_numeric(df['lucro'], errors='coerce').fillna(0)
+    df['despesas'] = pd.to_numeric(df['despesas'], errors='coerce').fillna(0)
 
-    # Gráfico Estilo Bolsa de Valores
+    # Gráfico
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df['data'], y=df['bruto'], name='Bruto', line=dict(color='#1f77b4', width=2)))
     fig.add_trace(go.Scatter(x=df['data'], y=df['lucro'], name='Lucro Real', line=dict(color='#00ff00', width=4)))
@@ -99,7 +102,7 @@ if not df.empty:
     manutencao_acumulada = df['bruto'].sum() * perc_manut
     lucro_total = df['lucro'].sum()
 
-    # BLOCOS DE MÉTRICAS
+    # MÉTRICAS
     m1, m2, m3 = st.columns(3)
     m1.metric("Lucro Total", f"R$ {lucro_total:,.2f}")
     m2.metric("Manutenção", f"R$ {manutencao_acumulada:,.2f}")
@@ -109,11 +112,12 @@ if not df.empty:
     st.subheader("📋 Histórico")
     st.dataframe(df, use_container_width=True, hide_index=True)
     
-    # Botão para limpar/reiniciar (Cuidado: isso apaga a planilha!)
-    if st.button("Limpar Dados da Nuvem"):
-        if st.checkbox("Tenho certeza que quero apagar tudo"):
+    # Opção para resetar
+    with st.expander("⚙️ OPÇÕES AVANÇADAS"):
+        if st.button("Limpar Todos os Dados"):
             df_vazio = pd.DataFrame(columns=["data", "app", "bruto", "km", "despesas", "lucro"])
-            conn.update(worksheet="Página1", data=df_vazio)
+            conn.update(worksheet="dados", data=df_vazio)
+            st.warning("Dados apagados da nuvem.")
             st.rerun()
 else:
     st.info("Aguardando o primeiro registro na nuvem...")
