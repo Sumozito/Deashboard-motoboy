@@ -3,11 +3,13 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
-# CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(page_title="Meu Controle Financeiro", layout="centered")
+# Configuração visual do App
+st.set_page_config(page_title="CPMA Clone - Financeiro", layout="centered")
 
-# CREDENCIAIS (Para evitar erro de formatação nas Secrets do Streamlit)
-# Substitua APENAS o que está entre aspas se você criar uma nova conta de serviço
+# URL da sua planilha (que você forneceu)
+url_planilha = "https://docs.google.com/spreadsheets/d/12xdQ_4kXifbdK7JQedxXBVOK2-GOrkXEkY_hpdYFiEo/edit?usp=drivesdk"
+
+# Credenciais inseridas direto no código para facilitar o seu acesso no telemóvel
 creds = {
     "type": "service_account",
     "project_id": "controlemotoboy",
@@ -16,62 +18,60 @@ creds = {
     "client_email": "controlemotoboy@controlemotoboy.iam.gserviceaccount.com",
 }
 
-# Tratamento da chave para evitar erro de leitura
+# Tratamento da chave
 creds["private_key"] = creds["private_key"].replace("\\n", "\n")
 
-# CONEXÃO COM A PLANILHA
+# Estabelecer conexão
 conn = st.connection("gsheets", type=GSheetsConnection, **creds)
 
-def buscar_dados():
-    return conn.read(worksheet="dados", ttl=0)
+# Função para ler os dados
+def carregar_dados():
+    try:
+        return conn.read(spreadsheet=url_planilha, worksheet="dados", ttl=0)
+    except:
+        return pd.DataFrame(columns=["data", "bruto", "km", "combustivel", "outras"])
 
-df = buscar_dados()
+df = carregar_dados()
 
-# INTERFACE ESTILO APP
-st.title("📊 CPMA Clone - Finanças")
+# --- INTERFACE ---
+st.title("🚀 Controle Financeiro Diário")
 
-# 1. RESUMO (DASHBOARD)
+# Dashboards (Métricas)
 if not df.empty:
-    # Garantir que os números sejam lidos como números
     for col in ['bruto', 'km', 'combustivel', 'outras']:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
-    total_bruto = df['bruto'].sum()
-    total_km = df['km'].sum()
-    total_despesas = df['combustivel'].sum() + df['outras'].sum()
-    lucro_real = total_bruto - total_despesas
-
-    c1, c2 = st.columns(2)
-    c1.metric("Ganho Total", f"R$ {total_bruto:.2f}")
-    c1.metric("KM Total", f"{total_km} km")
-    c2.metric("Lucro Real", f"R$ {lucro_real:.2f}", delta_color="normal")
-    c2.metric("Despesas", f"R$ {total_despesas:.2f}", delta="-")
+    lucro = df['bruto'].sum() - (df['combustivel'].sum() + df['outras'].sum())
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Ganho Bruto", f"R$ {df['bruto'].sum():.2f}")
+    col2.metric("Lucro Líquido", f"R$ {lucro:.2f}")
+    col3.metric("KM Total", f"{df['km'].sum()} km")
 
 st.divider()
 
-# 2. FORMULÁRIO DE LANÇAMENTO
-st.subheader("➕ Novo Lançamento")
-with st.form("registro", clear_on_submit=True):
-    data = st.date_input("Data", datetime.now())
-    bruto = st.number_input("Ganhos Brutos (R$)", min_value=0.0, step=10.0)
-    km = st.number_input("KM Rodado no dia", min_value=0.0, step=1.0)
-    combustivel = st.number_input("Gasto com Combustível (R$)", min_value=0.0, step=5.0)
-    outras = st.number_input("Outras Despesas (R$)", min_value=0.0, step=5.0)
+# Formulário de Lançamento
+with st.form("novo_registro"):
+    st.subheader("📝 Lançar Turno")
+    f_data = st.date_input("Data", datetime.now())
+    f_bruto = st.number_input("Ganhos Brutos (R$)", min_value=0.0)
+    f_km = st.number_input("KM Rodados", min_value=0.0)
+    f_gas = st.number_input("Combustível (R$)", min_value=0.0)
+    f_outras = st.number_input("Outras Despesas (R$)", min_value=0.0)
     
-    if st.form_submit_button("Salvar Turno"):
-        novo_dado = pd.DataFrame([{
-            "data": data.strftime('%d/%m/%Y'),
-            "bruto": bruto,
-            "km": km,
-            "combustivel": combustivel,
-            "outras": outras
+    if st.form_submit_button("Salvar Lançamento"):
+        novo_item = pd.DataFrame([{
+            "data": f_data.strftime("%d/%m/%Y"),
+            "bruto": f_bruto,
+            "km": f_km,
+            "combustivel": f_gas,
+            "outras": f_outras
         }])
-        
-        df_atualizado = pd.concat([df, novo_dado], ignore_index=True)
-        conn.update(worksheet="dados", data=df_atualizado)
-        st.success("Lançamento realizado com sucesso!")
+        df_final = pd.concat([df, novo_item], ignore_index=True)
+        conn.update(spreadsheet=url_planilha, worksheet="dados", data=df_final)
+        st.success("Salvo com sucesso na sua planilha!")
         st.rerun()
 
-# 3. HISTÓRICO
-if st.checkbox("Mostrar histórico de lançamentos"):
+# Histórico
+if st.checkbox("Ver Histórico"):
     st.dataframe(df, use_container_width=True)
