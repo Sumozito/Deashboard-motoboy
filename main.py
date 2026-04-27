@@ -1,0 +1,39 @@
+[connections.gsheets]
+type = "service_account"
+project_id = "controlemotoboy"
+private_key_id = "5f529abb4cc2ca81c93d5f81fb17684fec1b47ad"
+private_key = '''-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDjHXqXW5cDB7hh
+gvNNxpJwZjBF20Ymd+RJ0kDa+jwUqB+5eNeHYfnKGH84ct+s5YL22zvo4tjYn9J3
+eKqxeNw+KO05rQXKnARyJyVEih8EvaZK5ivZat+RoHGGt8CrPwqmqlUPf/6XOrY5
+0DO37T13g0V5HHVHt2klHBstSSxQ87Hx2zBYnkkINJSZOTWwUuzB7OdIkDMoUr4q
+E50mEQV4LSCEn72W8wNjKDDOgiNgyK8GPeg9nd3BSrHDkDt2H9Lott3iEdJKsRvc
+UYKtc0rV4/+kxju7dA3aSdMNHimMMMqz6bq7tncrVvrUGId0oSqO4Gwq1asL8KYj
+RltBSTblAgMBAAECggEANdt/fwWh9768r2kLk/HHN77P6zzus4AiY4wnw5XsKfTd
+ngxDgQXNPNijdgHAjUT+i8TG3kQg8ZpBt61Vy2v+fcOEpMlBwy2V4m25jhM+hP/FO
+TjwrgVU5+7F5wnnwR1u9hZzma3TNlaS/YlHYdeEdPqpjTu9b83wPw9RYsIJF71MM
+e7jCQAn5KfNHA2Exy10aNK8YWiOj1U37PeFpKvd7aHxcKNCj5Xb19RWzwNh1RRsw
+Lrj9Nfc3+IYQtvnM7qhJQMo9aKAV+ZjDPRD+w4C6g1FNT6aWNYJLi8En5r7fEXn8
+YyhubWN3DpNN1GFHOGCXqK/UGYlKvzoP9wUPUiTVmQKBgQD6AiT0pV65t2Uut2td
+nzUvfT/g0SPeIo/cA5bbLIqBYHkv7OSnXrI/6Kn5l9ULBixysRhnM9muhktTbch97
+Ej1J9K4OPqqemNG0CZWcZzjcFL6YlXQPTrOATMBB8xmnoYSa5LafMhU5GSJhWZsL
+OBKlbVMEmnZlNxayjmqxax6tvQKBgQDojuEuWT5+eEqEQBA3LZZC8DT3G4RbL/hB
+EGopgQB4T5Nk4hcw+VVtVLiev1VL8SHFQLI7B3lt63EzTsJitoO53t8rg8Sn5Ddg
+6Fqoe5DPF4ekJeslUc67BhlPR6yfZXfxaPageslUc67BhlPR6yfZXfxaPNsngD0ox
+CppJupL9bN0ZVuGPIaJHtINex4zr0cSQKBgQDwOjFCdsifkW6DRjG/r23RRWlM7DQ
+WMt88GH7dkAccxPfjjRj8qU6rZjuQQuwDR2Wkz7Mo9DuVxJ4Nwwom2u7Tam35OBQA
+Uv1ljrQY1kKXjsNZoHol30yx4o32kN486gGeSFiGfbxQ4irb+hr128pm9LaJvNY5
+CYcgyaIRmsmezQKBgQDiTG7pKCS88pcofCKLXwvyFUalExzHkzVTMwLrYkGv0VeP
+esawfF/ZpPCGYY9B9+IxzRPihxJtmQctsz1Ky2oBS9QExxNtgJE29sOJYbx3GOGA
+JPnd9e5iZbvpPsjGzvlZbBQ8JMCvTaJgQfLLPucanxB280VblRZ2HSsAH8U8KQKB
+gHxPlqQXzoNUH/ZjRSjE0OH8930l7ZKFySv+MKBri3rw/eZ/hvfbkOA9fBYOhVzw
+Na6LmjnDtRkUErOI9jLkh59MxKzT73eF7k/SODSoRskf/gEQuv9OmAAqWEWVttVL
+SOWyAEgkYT7DnJ5c6KzUK52kAz66uAO/LWVwJPvh4W4C
+-----END PRIVATE KEY-----'''
+client_email = "controlemotoboy@controlemotoboy.iam.gserviceaccount.com"
+client_id = "108309544043330130646"
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/controlemotoboy%40controlemotoboy.iam.gserviceaccount.com"
+spreadsheet = "https://docs.google.com/spreadsheets/d/12xdQ_4kXifbdK7JQedxXBVOK2-GOrkXEkY_hpdYFiEo/edit?usp=drivesdk"
