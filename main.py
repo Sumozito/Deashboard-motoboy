@@ -3,13 +3,10 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 
-# Configuração visual do App
-st.set_page_config(page_title="CPMA Clone - Financeiro", layout="centered")
+# Configuração da página para parecer um App de celular
+st.set_page_config(page_title="CPMA Clone", layout="centered")
 
-# URL da sua planilha (que você forneceu)
-url_planilha = "https://docs.google.com/spreadsheets/d/12xdQ_4kXifbdK7JQedxXBVOK2-GOrkXEkY_hpdYFiEo/edit?usp=drivesdk"
-
-# Credenciais inseridas direto no código para facilitar o seu acesso no telemóvel
+# Credenciais organizadas para evitar o erro de TypeError
 creds = {
     "type": "service_account",
     "project_id": "controlemotoboy",
@@ -18,60 +15,79 @@ creds = {
     "client_email": "controlemotoboy@controlemotoboy.iam.gserviceaccount.com",
 }
 
-# Tratamento da chave
+# Limpeza da chave
 creds["private_key"] = creds["private_key"].replace("\\n", "\n")
 
-# Estabelecer conexão
-conn = st.connection("gsheets", type=GSheetsConnection, **creds)
+# URL da sua planilha
+URL = "https://docs.google.com/spreadsheets/d/12xdQ_4kXifbdK7JQedxXBVOK2-GOrkXEkY_hpdYFiEo/edit?usp=drivesdk"
 
-# Função para ler os dados
-def carregar_dados():
-    try:
-        return conn.read(spreadsheet=url_planilha, worksheet="dados", ttl=0)
-    except:
-        return pd.DataFrame(columns=["data", "bruto", "km", "combustivel", "outras"])
+# CONEXÃO BLINDADA
+try:
+    conn = st.connection("gsheets", 
+                         type=GSheetsConnection, 
+                         project_id=creds["project_id"], 
+                         private_key=creds["private_key"], 
+                         client_email=creds["client_email"])
+except Exception as e:
+    st.error(f"Erro na conexão: {e}")
+    st.stop()
 
-df = carregar_dados()
+# Função para carregar os dados
+def carregar():
+    return conn.read(spreadsheet=URL, worksheet="dados", ttl=0)
 
-# --- INTERFACE ---
-st.title("🚀 Controle Financeiro Diário")
+# Início do App
+st.title("📊 Gestão MotoristaSOS")
 
-# Dashboards (Métricas)
-if not df.empty:
-    for col in ['bruto', 'km', 'combustivel', 'outras']:
-        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+try:
+    df = carregar()
     
-    lucro = df['bruto'].sum() - (df['combustivel'].sum() + df['outras'].sum())
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Ganho Bruto", f"R$ {df['bruto'].sum():.2f}")
-    col2.metric("Lucro Líquido", f"R$ {lucro:.2f}")
-    col3.metric("KM Total", f"{df['km'].sum()} km")
+    # Cálculos para o Dashboard
+    if not df.empty:
+        df['bruto'] = pd.to_numeric(df['bruto'], errors='coerce').fillna(0)
+        df['combustivel'] = pd.to_numeric(df['combustivel'], errors='coerce').fillna(0)
+        df['outras'] = pd.to_numeric(df['outras'], errors='coerce').fillna(0)
+        df['km'] = pd.to_numeric(df['km'], errors='coerce').fillna(0)
+        
+        ganho_total = df['bruto'].sum()
+        gasto_total = df['combustivel'].sum() + df['outras'].sum()
+        lucro_real = ganho_total - gasto_total
+        
+        # Estilo CPMA (Métricas em destaque)
+        m1, m2 = st.columns(2)
+        m1.metric("Ganho Bruto", f"R$ {ganho_total:.2f}")
+        m1.metric("KM Total", f"{df['km'].sum():.0f} km")
+        m2.metric("Lucro Líquido", f"R$ {lucro_real:.2f}")
+        m2.metric("Total Gastos", f"R$ {gasto_total:.2f}", delta_color="inverse")
 
-st.divider()
+    st.divider()
 
-# Formulário de Lançamento
-with st.form("novo_registro"):
-    st.subheader("📝 Lançar Turno")
-    f_data = st.date_input("Data", datetime.now())
-    f_bruto = st.number_input("Ganhos Brutos (R$)", min_value=0.0)
-    f_km = st.number_input("KM Rodados", min_value=0.0)
-    f_gas = st.number_input("Combustível (R$)", min_value=0.0)
-    f_outras = st.number_input("Outras Despesas (R$)", min_value=0.0)
-    
-    if st.form_submit_button("Salvar Lançamento"):
-        novo_item = pd.DataFrame([{
-            "data": f_data.strftime("%d/%m/%Y"),
-            "bruto": f_bruto,
-            "km": f_km,
-            "combustivel": f_gas,
-            "outras": f_outras
-        }])
-        df_final = pd.concat([df, novo_item], ignore_index=True)
-        conn.update(spreadsheet=url_planilha, worksheet="dados", data=df_final)
-        st.success("Salvo com sucesso na sua planilha!")
-        st.rerun()
+    # Formulário de Lançamento
+    st.subheader("📝 Novo Lançamento")
+    with st.form("add_registro", clear_on_submit=True):
+        f_data = st.date_input("Data", datetime.now())
+        f_bruto = st.number_input("Quanto ganhou hoje? (R$)", min_value=0.0)
+        f_km = st.number_input("Quantos KM rodou?", min_value=0.0)
+        f_gas = st.number_input("Gasto com Combustível (R$)", min_value=0.0)
+        f_outras = st.number_input("Outras Despesas (R$)", min_value=0.0)
+        
+        if st.form_submit_button("Salvar no App"):
+            novo_dado = pd.DataFrame([{
+                "data": f_data.strftime("%d/%m/%Y"),
+                "bruto": f_bruto,
+                "km": f_km,
+                "combustivel": f_gas,
+                "outras": f_outras
+            }])
+            
+            df_atualizado = pd.concat([df, novo_dado], ignore_index=True)
+            conn.update(spreadsheet=URL, worksheet="dados", data=df_atualizado)
+            st.success("Dados salvos com sucesso!")
+            st.rerun()
 
-# Histórico
-if st.checkbox("Ver Histórico"):
-    st.dataframe(df, use_container_width=True)
+    if st.checkbox("Ver histórico detalhado"):
+        st.dataframe(df)
+
+except Exception as e:
+    st.warning("Aguardando dados ou erro na leitura da planilha.")
+    st.info("Verifique se a aba se chama 'dados' e tem os cabeçalhos corretos.")
